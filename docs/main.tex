@@ -1,0 +1,207 @@
+\documentclass[11pt,a4paper]{article} 
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+
+\lstset{   basicstyle=\ttfamily\small,   breaklines=true,   frame=single,   numbers=left,   numberstyle=\tiny\color{gray},   keywordstyle=\color{blue},   commentstyle=\color{green!50!black},   stringstyle=\color{red!60!black},   backgroundcolor=\color{gray!5}, }
+
+\title{   Comparative Evaluation of Static Analysis Tools\\
+on Original and Mutated Juliet Test Cases }
+
+\author{   Pomsár Jakub\\   
+Faculty of Informatics\\   
+Masaryk University\\
+582923@mail.muni.cz }
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract} This report presents a comparative evaluation of three static analysis tools: Cppcheck, Clang Static Analyzer, and Facebook Infer. The tools are compared on selected test cases from the NIST Juliet Test Suite for C/C++ and on modified variants generated through systematic source-level transformations. The goal is to investigate differences in detection capability, analysis runtime, and behavioral characteristics across tools that embody fundamentally different static analysis paradigms: pattern-based checking, inter-procedural symbolic execution, and abstract interpretation with bi-abduction. The vulnerability categories under study are memory leaks (CWE-401), double free (CWE-415), use-after-free (CWE-416), uninitialized variables (CWE-457), and null pointer dereferences (CWE-476).
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ============================================================ 
+\section{Introduction} % ============================================================
+
+\subsection{Motivation}
+
+Static analysis is one of the widely used techniques in modern software development pipelines to detect bugs and security vulnerabilities before code ever executes. Unlike dynamic testing, a static analyzer operates on source or intermediate representations directly and can reason about execution paths that may not be exercised by a particular test suite.
+
+The C and C++ languages remain dominant in systems programming, embedded development, and performance-critical applications, yet they expose programmers to a class of memory-safety errors---use-after-free, double free, memory leaks, and null dereferences---that are both common in practice and frequently exploitable~\cite{cwe2023}. These defect classes have consistently appeared near the top of the CWE Top~25 Most Dangerous Software Weaknesses over the past decade and are the root cause of a significant fraction of CVEs in widely deployed software.
+
+Three tools that are freely available and widely used in practice each embody a different analysis philosophy:
+
+\begin{itemize}  
+	\item \textbf{Cppcheck} is a lightweight, rule-based checker that operates over abstract syntax trees without requiring a full build; it is fast and aims to maintain a low false-positive rate.  
+	\item \textbf{Clang Static Analyzer (CSA)} performs inter-procedural symbolic execution along explicitly enumerated paths, tracking program state to find  defects that only manifest under specific conditions.  
+	\item \textbf{Facebook Infer} applies abstract interpretation based on separation logic and a technique called bi-abduction to reason about heap-manipulating programs at scale, with particular strength in inter-procedural resource and memory analysis.
+\end{itemize}
+
+Despite all three tools targeting overlapping defect classes, their detection profiles, false-positive rates, and scalability characteristics differ substantially due to their underlying algorithms. Understanding these differences is essential for practitioners who must choose or combine tools in a real development context, and for researchers who wish to assess what the state of practice can and cannot detect.
+
+\subsection{Goals}
+
+The concrete goals of this study are:
+
+\begin{enumerate}  
+	\item Characterize the \emph{algorithmic foundations} of each tool at a level     of detail beyond marketing summaries: the internal representations used,     the analysis algorithms applied, and the known theoretical and practical     limitations.  
+	\item Measure \emph{detection rates and false-positive counts} on a     controlled benchmark derived from the NIST Juliet Test Suite across five     CWE categories relevant to C/C++ memory safety.  
+	\item Investigate how \emph{source-level transformations} of test cases---     specifically, increases in inter-procedural complexity, the introduction of     opaque control flow, and aliasing---affect each tool's ability to detect     the same underlying defect.  
+	\item Identify \emph{patterns of complementarity and overlap} between the     tools that could inform a multi-tool deployment strategy. 
+\end{enumerate}
+
+
+\section{Background} 
+\label{sec:background} % ============================================================
+
+\subsection{Static Analysis}
+
+\emph{Static program analysis} is the process of automatically extracting information about the runtime behavior of a program from its source or compiled representation without actually executing it~\cite{nielson1999principles}. The term encompasses a broad spectrum of techniques ranging from simple syntactic pattern matching to full abstract interpretation of the program semantics.
+
+Most industrial static analysis tools operate on some form of \emph{intermediate representation} (IR) derived from the source. Common IRs include the abstract syntax tree (AST), control-flow graphs (CFGs), call graphs, and static single assignment (SSA) form. The choice of IR determines which properties are easy to express and compute. For example, a CFG makes data-flow analysis tractable, whereas an AST is more natural for syntactic pattern checking.
+
+\paragraph{Soundness and completeness.} A sound analyzer reports every true bug (no false negatives); a complete analyzer never reports a false alarm (no false positives). Rice's theorem~\cite{rice1953} guarantees that no algorithm can be simultaneously sound, complete, and terminating for any non-trivial semantic property of programs. In practice, every industrial tool sacrifices one or both properties: Cppcheck deliberately trades soundness for precision, while formal abstract interpreters such as Astr\'{e}e sacrifice completeness for soundness. Understanding where a tool sits on this spectrum is prerequisite to interpreting its output.
+
+\paragraph{Intra- vs.\ inter-procedural analysis.} An \emph{intra-procedural} analysis treats each function independently, losing information that flows across call boundaries. An \emph{inter-procedural} analysis propagates facts through the call graph and is necessary to detect defects that arise from the interaction of caller and callee---for example, a pointer allocated in one function and freed twice through two separate call chains. The cost of inter-procedural analysis can be exponential in the depth of the call graph, so most tools apply approximations such as call summaries or bounded inlining.
+
+\subsection{Static Analysis Challenges}
+
+Several fundamental challenges limit the precision of static analyzers in practice.
+
+\paragraph{Alias analysis.} Two pointers \emph{alias} if they may refer to the same memory location. Determining aliasing relationships precisely is undecidable in general~\cite{landi1992}; practical analyses compute conservative over-approximations. Coarse alias analysis causes both false positives (two distinct pointers treated as aliasing) and false negatives (aliasing not recognized when it occurs through complex chains of assignments or heap structures).
+
+\paragraph{Path sensitivity.} A \emph{path-sensitive} analysis tracks the program state separately along different branches of a conditional and can prove that a bug is only reachable along certain paths. A \emph{path-insensitive} analysis merges states at join points, which introduces imprecision but is computationally cheaper. The Clang Static Analyzer is path-sensitive within its exploration budget; Cppcheck is largely path-insensitive.
+
+\paragraph{Heap modeling.} Heap-allocated memory presents particular difficulties: the number of heap cells is unbounded, their layout depends on runtime values, and the same logical object may be accessed through multiple pointer chains. Separation logic provides a compositional framework for heap reasoning, but its efficient implementation in an analyzer requires careful design of abstract domains and join operators.
+
+\paragraph{Scalability.} Precise analysis is expensive. Exhaustive symbolic execution is exponential in the number of branches; context-sensitive inter-procedural analysis is at best polynomial but with high constants in practice. Real tools impose bounds (maximum path length, maximum call depth, inlining budget) that inevitably cause missed bugs when the true defect path exceeds these limits.
+
+\subsection{Common Vulnerability Types}
+
+The five CWE categories targeted in this study represent the most prevalent and security-relevant memory-safety errors in C/C++ code.
+
+\paragraph{CWE-401: Memory Leak.} A memory leak occurs when heap-allocated memory is no longer reachable through any live pointer and therefore can never be freed. While not immediately exploitable in the manner of control-flow hijacking bugs, memory leaks degrade long-running service availability and can enable denial-of-service attacks. Detection requires tracking allocation sites and proving that every allocation on every path is eventually freed or handed off to a freeing abstraction.
+
+\paragraph{CWE-415: Double Free.} Calling \texttt{free} on a pointer that has already been freed corrupts the allocator's internal metadata, leading to undefined behavior that is frequently exploitable for arbitrary code execution. Detection requires path-sensitive tracking of the \emph{freed} attribute of each heap object.
+
+\paragraph{CWE-416: Use After Free.} Accessing memory through a pointer after the pointed-to object has been freed yields undefined behavior and is a primary attack primitive in modern exploitation. Use-after-free is often inter-procedural: the free occurs in one function and the use in another, making intra-procedural tools blind to many instances.
+
+\paragraph{CWE-457: Use of Uninitialized Variable.} Reading a local variable before any assignment yields an indeterminate value. In C/C++ this is undefined behavior, and compilers may optimize based on the assumption that it never occurs, leading to surprising bugs. Detection via data-flow analysis (reaching definitions or def-use chains) is well understood but can be defeated by complex control flow or indirect writes.
+
+\paragraph{CWE-476: NULL Pointer Dereference.} Dereferencing a null pointer results in a segmentation fault or, in privileged code, a kernel panic or exploitable condition. Detecting null dereferences requires tracking which pointers may be null at each program point, which is sensitive to inter-procedural value propagation and control-flow handling of error returns.
+
+% ============================================================ 
+\section{Investigated Tools} 
+\label{sec:tools}
+% ============================================================
+
+\subsection{Cppcheck}
+
+\subsubsection{Architecture}
+
+Cppcheck~\cite{cppcheck} is an open-source static analysis tool for C and C++ that has been in active development since 2007. Its architecture is intentionally simple to maximize portability and minimize build dependencies: the tool operates directly on source files without requiring a compilation database, though one can be supplied to improve accuracy.
+
+The analysis pipeline proceeds in four stages. First, a \emph{preprocessor} expands macros and conditional compilation directives, producing a token stream for each configuration. By default Cppcheck analyzes multiple preprocessor configurations simultaneously, which is unusual and valuable for catching bugs that appear only under certain compile-time flags. Second, a hand-written \emph{tokenizer and AST builder} converts the token stream into an abstract syntax tree. Third, a \emph{symbol database} is constructed that resolves types, scopes, and variable declarations. Finally, a set of \emph{checkers} traverse the AST and symbol table to detect specific patterns; each checker is a self-contained module registered with a central dispatcher.
+
+Cppcheck performs \emph{value flow analysis}: a lightweight form of data-flow analysis that propagates known constant values, null/non-null attributes, and container sizes forward through the AST. The value flow engine is explicitly bounded to avoid state explosion and does not perform full fixpoint computation; it is better characterized as a heuristic forward propagation than a classical data-flow analysis.
+
+\subsubsection{Analysis Approach}
+
+Cppcheck's analysis is predominantly \emph{pattern-based}: checkers encode specific syntactic or semantic anti-patterns and fire when they are matched in the AST or value flow graph. This design choice prioritizes low false-positive rates over completeness. The tool explicitly documents that it is not sound and will miss bugs that do not match known patterns; in exchange, the warnings it does emit are usually actionable.
+
+For memory-related checks, Cppcheck tracks allocation and deallocation of heap memory within single translation units. It maintains a per-variable state machine with states such as \textsc{allocated}, \textsc{freed}, and \textsc{unknown}. Transitions are driven by calls to \texttt{malloc}/\texttt{free} and their variants (configurable via library definitions). When a variable in state \textsc{freed} is passed to \texttt{free} again, a double-free warning is emitted; when a function returns while a local pointer is still in state \textsc{allocated} and no aliasing path is known to escape it, a memory-leak warning is emitted.
+
+Cppcheck supports a \emph{library configuration} mechanism (XML files) through which the behavior of external functions---allocation, deallocation, argument nullability---can be specified. This allows the checker to reason about standard library functions and, to a limited extent, third-party APIs, without seeing their source.
+
+\subsubsection{Strengths and Limitations}
+
+Cppcheck's primary strength is \emph{speed and ease of integration}: it requires no build system and can analyze large codebases in seconds. Its low false-positive rate makes it practical for continuous integration pipelines where developer attention is limited.
+
+Its primary limitation is its \emph{shallow inter-procedural reasoning}. Because it does not perform full call-graph construction or context-sensitive analysis, it cannot detect bugs that arise from the interaction of caller and callee unless the called function is inlined or summarized. It is also largely path-insensitive: the value flow engine propagates values but does not split state at branches, which means bugs that are only reachable along specific paths may be either missed or spuriously reported on infeasible paths. It does not maintain a rich heap abstraction comparable to symbolic-execution or separation-logic based analyzers.
+
+% ------------------------------------------------------------ \subsection{Clang Static Analyzer} % ------------------------------------------------------------
+
+\subsubsection{Architecture}
+
+The Clang Static Analyzer (CSA)~\cite{clangsa} is a path-sensitive, inter-procedural static analysis framework built on top of the Clang compiler infrastructure. It is distributed as part of the LLVM project and is invoked either through the \texttt{scan-build} wrapper or directly via \texttt{clang --analyze}.
+
+CSA operates on Clang's \emph{Clang AST} and, more importantly, on the \emph{CFGStmt} control-flow graph, which is a statement-level CFG constructed from the AST. The analysis is demand-driven: rather than computing a global fixed point over the CFG, CSA performs an \emph{explicit-state exploration} of feasible paths through the program, maintaining a \emph{program state} object at each exploration node.
+
+The central data structure is the \emph{ExplodedGraph}: a directed acyclic graph in which each node represents a pair $\langle \mathit{ProgramPoint}, \mathit{ProgramState} \rangle$. A program point identifies a location in the CFG; the program state encodes symbolic values of all tracked memory regions and associated constraints. The exploration engine (the \emph{CoreEngine}) traverses this graph using a worklist algorithm, applying \emph{transfer functions} at each statement and splitting the graph at branch points to maintain path sensitivity.
+
+Program states are represented as persistent (copy-on-structural-share) immutable maps, which allows the engine to fork state at branches without expensive copying. State merging (\emph{widening}) occurs only when the engine detects that the same CFG node has been visited with a state that subsumes the current one, or when the exploration budget is exhausted.
+
+\subsubsection{Symbolic Execution}
+
+CSA's path-sensitive analysis is a form of \emph{symbolic execution}: instead of concrete values, variables hold \emph{symbolic values} (typed symbolic integers and memory region descriptors), and branch conditions are accumulated as \emph{constraints} in an associated constraint manager (backed by a range arithmetic solver). When the constraint manager determines that the constraints on a path are unsatisfiable, the path is pruned as infeasible.
+
+Heap memory is modeled through an abstract domain called \emph{MemRegion}: every allocation site produces a unique symbolic region identifier, and pointer values are represented as region descriptors with optional offsets. This allows CSA to track, for example, that two pointer-typed variables hold the same region (aliasing) or that a particular region has been freed--- enabling detection of use-after-free and double-free across multiple statements on the same path.
+
+Bug detection is implemented through \emph{checkers} that subscribe to callbacks triggered by specific events during exploration (function calls, pointer dereferences, branch conditions, end of function, etc.). The \texttt{alpha.security.MallocOverflow}, \texttt{unix.Malloc}, \texttt{STLAlgorithmModeling}, and related checkers maintain per-region allocation state and emit diagnostics when violations are detected.
+
+Inter-procedural analysis is achieved through \emph{inlining}: when a call site is encountered, CSA attempts to inline the callee's body into the current exploration path. The maximum inlining depth is configurable (default: 5--8 levels depending on version); calls that exceed the budget or that target functions without available source are modeled conservatively through \emph{function summaries}.
+
+\subsubsection{Strengths and Limitations}
+
+CSA's path sensitivity and symbolic execution give it the ability to detect bugs that only manifest along specific execution paths and to suppress false positives on infeasible paths. Its tight integration with the Clang compiler means it benefits from Clang's type information and can analyze C++ templates accurately. The checker plugin API allows domain-specific extensions.
+
+The primary limitation is \emph{scalability}. Explicit-state symbolic execution is exponential in the number of branches in the worst case; CSA mitigates this with aggressive path merging and inlining budgets, but these limits can cause it to miss bugs that appear only beyond the exploration horizon. Another limitation is \emph{loop handling}: by default, loops are unrolled only a small fixed number of times, and loop invariants are not synthesized, so bugs that appear only after many iterations are invisible. Finally, CSA does not model the heap structurally for arbitrary linked structures; it handles individual allocation sites but cannot reason about complex data structures such as linked lists involving multiple heap cells.
+
+% ------------------------------------------------------------ \subsection{Infer} % ------------------------------------------------------------
+
+\subsubsection{Architecture}
+
+Facebook Infer~\cite{calcagno2011} (hereafter Infer) is an inter-procedural static analysis tool for C, C++, Java, and Objective-C developed at Meta (formerly Facebook) and open-sourced in 2015. Unlike CSA, Infer is designed to be \emph{compositional}: the analysis of a function depends only on the function's summary, not on the entire call graph, which enables incremental analysis of large codebases.
+
+Infer's analysis pipeline for C/C++ begins with a \emph{compilation capture} phase in which Clang is used to produce a Clang AST; this AST is then translated into Infer's own IR, the \emph{SIL} (Synthetic Intermediate Language). SIL is an imperative IR with explicit heap operations (load, store, alloc, free) and a restricted set of control-flow constructs. The choice of a custom IR allows Infer to apply uniform analysis algorithms across all supported languages.
+
+The central analysis phase operates on SIL functions one at a time, computing \emph{bi-abductive summaries} (described below) that are stored in a summary database. A subsequent \emph{reporting phase} applies summaries to call sites and identifies inconsistencies that correspond to bugs. Because summaries are computed per-function, Infer can trivially parallelize the analysis across functions, making it well-suited to large codebases.
+
+\subsubsection{Abstract Interpretation and Bi-Abduction}
+
+Infer's theoretical foundation is \emph{separation logic}~\cite{reynolds2002}, a logical framework for reasoning about programs that manipulate heap-allocated memory. In separation logic, the \emph{separating conjunction} $P * Q$ asserts that $P$ and $Q$ hold over disjoint portions of the heap, enabling local reasoning: a proof of a function's correctness need only mention the heap cells the function actually accesses.
+
+The key algorithmic contribution underlying Infer is \emph{bi-abduction}~\cite{calcagno2011}, an inference procedure that simultaneously computes two separation logic formulae for a function:
+
+\begin{itemize}  
+	\item A \emph{precondition} (the \emph{anti-frame} $A$): the minimal heap     footprint that the function requires in order to execute without error.  
+	\item A \emph{postcondition} (the \emph{frame} $F$): a description of the     heap state produced by the function, expressed relative to the precondition. 
+\end{itemize}
+	      
+Given a call site and the callee's bi-abductive summary $(A, F)$, Infer checks whether the caller's current heap state satisfies $A$ (possibly after further abduction at nested call sites) and then applies $F$ to update the heap abstraction. This process is compositional: the correctness of a callee is established independently of any particular caller context, and the caller consumes the summary without re-analyzing the callee's body.
+	      
+In practice, the abstract domain used by Infer over SIL is a combination of \emph{symbolic heaps}---pairs $(F, H)$ where $F$ is a footprint formula and $H$ is a heap formula---with abstract operations for allocation, field access, pointer arithmetic, and deallocation. The join operator over symbolic heaps is defined to compute the most specific formula that covers both inputs, which corresponds to computing a disjunction with subsequent simplification. Bi-abduction is implemented via a constrained search procedure that searches for the smallest frame and anti-frame consistent with the function body and a given specification template.
+	      
+For resource leak detection, Infer checks whether every object allocated in the precondition footprint is reachable (directly or through field chains) from some live pointer at the function exit; any allocated cell that becomes unreachable before deallocation constitutes a leak. For use-after-free and double-free, Infer maintains a \emph{freed} attribute on symbolic heap cells and checks for accesses or repeated deallocations.
+	      
+Recent versions of Infer employ the \emph{Pulse} analysis for memory and resource safety checks. \emph{Pulse} combines ideas from abstract interpretation and ownership reasoning while retaining the compositional philosophy of Infer.
+	      
+\subsubsection{Strengths and Limitations}
+	      
+Infer's compositionality gives it a strong advantage in inter-procedural scenarios: it can detect bugs that span arbitrarily deep call chains without suffering from exponential path explosion, because each function contributes only a polynomial-size summary. This design also enables \emph{incremental analysis}: when only a subset of functions change between builds, only those functions and their transitive callers need to be re-analyzed. Infer has been reported to find thousands of previously unknown bugs in large industrial codebases~\cite{calcagno2015}.
+	      
+The principal limitations arise from the abstractions used. Bi-abduction operates over a restricted class of heap shapes (primarily points-to chains and acyclic list segments); highly complex heap topologies (e.g., doubly-linked lists with back pointers) may not be representable in the abstract domain, leading to imprecision. Infer is also known to produce false positives in the presence of complex ownership transfer patterns---for example, when a function conditionally transfers pointer ownership to a callee---because the bi-abduction procedure may not infer the most precise summary. Additionally, Infer's analysis of C++ code is less mature than its Java analysis; certain C++ idioms (RAII, smart pointers, virtual dispatch) are only partially modeled.
+
+\section*{Acknowledgments}
+
+Generative AI tools, specifically OpenAI ChatGPT and Anthropic Claude Sonnet, were used for proofreading, language refinement, formatting suggestions, and improvement of text clarity.
+
+
+\bibliographystyle{plain}
+\bibliography{references}
+	      
+\end{document}
