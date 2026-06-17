@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Tests
+tests/juliet
+
+# Infer
+infer-out/
