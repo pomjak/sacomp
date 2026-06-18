@@ -1,32 +1,44 @@
 import tools
 import parser
+import metrics
+from pathlib import Path
+import sys
+
+
+def find_cpp_files(folder: Path) -> list[Path]:
+    return [path for path in folder.rglob("*.cpp") if path.is_file()]
 
 
 def main(argv):
-    raw_cpp = tools.run_cppcheck(argv[1])
-    raw_clang = tools.run_clang_sa(argv[1])
-    raw_infer = tools.run_infer(argv[1])
+    if len(argv) != 2:
+        print(f"Usage: {argv[0]} <folder>")
+        return 1
 
-    cpp_out = parser.process_cpp(raw_cpp) 
-    clang_out = parser.process_clang(raw_clang)
-    infer_out = parser.process_infer(raw_infer)
+    folder = Path(argv[1])
+    if not folder.is_dir():
+        print(f"Error: {folder} is not a folder")
+        return 1
 
-    print(argv[1])
-    print("CPPCheck findings:")
-    for finding in cpp_out:
-        print(finding.category)
+    for test_file in find_cpp_files(folder):
+        raw_cpp = tools.run_cppcheck(str(test_file))
+        raw_clang = tools.run_clang_sa(str(test_file))
+        raw_infer = tools.run_infer(str(test_file))
 
-    print("Clang SA findings:")
-    for finding in clang_out:
-        print(finding.category)
+        cpp_out = parser.process_cpp(raw_cpp)
+        clang_out = parser.process_clang(raw_clang)
+        infer_out = parser.process_infer(raw_infer)
 
-    print("Infer findings:")
-    for finding in infer_out:
-        print(finding.category)
-    print("-------------------------")
+        category = test_file.parent.name
+
+        metrics.check_findings("Cppcheck", cpp_out, category)
+
+        metrics.check_findings("Clang SA", clang_out, category)
+
+        metrics.check_findings("Infer", infer_out, category)
+        print("-------------------------")
+
+    return 0
 
 
 if __name__ == "__main__":
-    import sys
-
-    main(sys.argv)
+    raise SystemExit(main(sys.argv))

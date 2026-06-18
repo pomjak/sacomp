@@ -3,25 +3,34 @@
 from dataclasses import dataclass
 
 CATEGORY_MEMORY_LEAK = "MEMORY_LEAK"
+CATEGORY_DOUBLE_FREE = "DOUBLE_FREE"
 CATEGORY_USE_AFTER_FREE = "USE_AFTER_FREE"
 CATEGORY_NULL_DEREFERENCE = "NULL_DEREFERENCE"
 CATEGORY_UNINITIALIZED_VALUE = "UNINITIALIZED_VALUE"
+
 
 NORMALIZED_CATEGORIES = {
     # cppcheck
     "deallocuse": CATEGORY_USE_AFTER_FREE,
     "memleak": CATEGORY_MEMORY_LEAK,
+    "doubleFree": CATEGORY_DOUBLE_FREE,
     "nullPointer": CATEGORY_NULL_DEREFERENCE,
+    "nullPointerOutOfMemory": CATEGORY_NULL_DEREFERENCE,
     "uninitvar": CATEGORY_UNINITIALIZED_VALUE,
+    "uninitStructMember": CATEGORY_UNINITIALIZED_VALUE,
     # clang-sa
     "Use-after-free": CATEGORY_USE_AFTER_FREE,
     "Memory leak": CATEGORY_MEMORY_LEAK,
+    "Double free": CATEGORY_DOUBLE_FREE,
     "Null pointer dereference": CATEGORY_NULL_DEREFERENCE,
-    "RESULT OF OPERATION IS GARBAGE OR UNDEFINED": CATEGORY_UNINITIALIZED_VALUE,
-    "UNINITIALIZED ARGUMENT VALUE": CATEGORY_UNINITIALIZED_VALUE,
+    "Dereference of null pointer": CATEGORY_NULL_DEREFERENCE,
+    "Result of operation is garbage or undefined": CATEGORY_UNINITIALIZED_VALUE,
+    "Uninitialized argument value": CATEGORY_UNINITIALIZED_VALUE,
     # infer
     "MEMORY_LEAK_C": CATEGORY_MEMORY_LEAK,
     "USE_AFTER_FREE": CATEGORY_USE_AFTER_FREE,
+    "USE_AFTER_DELETE": CATEGORY_USE_AFTER_FREE,
+    "DOUBLE_FREE": CATEGORY_DOUBLE_FREE,
     "NULLPTR_DEREFERENCE": CATEGORY_NULL_DEREFERENCE,
     "PULSE_UNINITIALIZED_VALUE": CATEGORY_UNINITIALIZED_VALUE,
 }
@@ -46,9 +55,8 @@ def process_cpp(raw_cpp):
 
 
 def process_clang(raw_clang):
-    return [
-        normalize_clang(x, raw_clang["files"]) for x in raw_clang["diagnostics"]
-    ]
+    return [normalize_clang(x, raw_clang["files"]) for x in raw_clang["diagnostics"]]
+
 
 def process_infer(raw_infer):
     return [normalize_infer(x) for x in raw_infer]
@@ -61,7 +69,7 @@ def normalize_cppcheck(error):
 
     return Finding(
         tool="cppcheck",
-        category=NORMALIZED_CATEGORIES.get(rule, rule.upper()),
+        category=NORMALIZED_CATEGORIES.get(rule, rule),
         severity=error.attrib["severity"].upper(),
         file=(loc.attrib["file"] if loc is not None else ""),
         line=(int(loc.attrib["line"]) if loc is not None else -1),
@@ -78,9 +86,7 @@ def normalize_clang(diag, files):
 
     return Finding(
         tool="clang-sa",
-        category=NORMALIZED_CATEGORIES.get(
-            diag["type"], diag["type"].upper().replace("-", "_")
-        ),
+        category=NORMALIZED_CATEGORIES.get(diag["type"], diag["type"]),
         # Clang SA plist doesn't expose severity directly, diagnostics are generally warnings.
         severity="WARNING",
         file=files[loc["file"]],
@@ -96,9 +102,7 @@ def normalize_clang(diag, files):
 def normalize_infer(issue):
     return Finding(
         tool="infer",
-        category=NORMALIZED_CATEGORIES.get(
-            issue["bug_type"], issue["bug_type"].upper()
-        ),
+        category=NORMALIZED_CATEGORIES.get(issue["bug_type"], issue["bug_type"]),
         severity=issue["severity"].upper(),
         file=issue["file"],
         line=issue["line"],
