@@ -17,7 +17,9 @@ NORMALIZED_CATEGORIES = {
     "nullPointer": CATEGORY_NULL_DEREFERENCE,
     "nullPointerOutOfMemory": CATEGORY_NULL_DEREFERENCE,
     "uninitvar": CATEGORY_UNINITIALIZED_VALUE,
+    "uninitstring": CATEGORY_UNINITIALIZED_VALUE,  # Uninitialized bound string
     "uninitStructMember": CATEGORY_UNINITIALIZED_VALUE,
+    "autovarfree": CATEGORY_USE_AFTER_FREE,
     # clang-sa
     "Use-after-free": CATEGORY_USE_AFTER_FREE,
     "Memory leak": CATEGORY_MEMORY_LEAK,
@@ -26,6 +28,8 @@ NORMALIZED_CATEGORIES = {
     "Dereference of null pointer": CATEGORY_NULL_DEREFERENCE,
     "Result of operation is garbage or undefined": CATEGORY_UNINITIALIZED_VALUE,
     "Uninitialized argument value": CATEGORY_UNINITIALIZED_VALUE,
+    "Assigned value is garbage or undefined": CATEGORY_UNINITIALIZED_VALUE,
+    "Stack address escaped": CATEGORY_USE_AFTER_FREE,
     # infer
     "MEMORY_LEAK_C": CATEGORY_MEMORY_LEAK,
     "USE_AFTER_FREE": CATEGORY_USE_AFTER_FREE,
@@ -49,6 +53,13 @@ class Finding:
     cwe: str | None
     function: str | None
 
+def process(tool, raw):
+    if tool == "cppcheck":
+        return process_cpp(raw)
+    elif tool == "clang":
+        return process_clang(raw)
+    elif tool == "infer":
+        return process_infer(raw)
 
 def process_cpp(raw_cpp):
     return [normalize_cppcheck(x) for x in raw_cpp]

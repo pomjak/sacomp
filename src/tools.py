@@ -6,6 +6,14 @@ import tempfile
 import plistlib
 
 
+def run(tool, file):
+    if tool == "cppcheck":
+        return run_cppcheck(file)
+    elif tool == "clang":
+        return run_clang_sa(file)
+    elif tool == "infer":
+        return run_infer(file)
+
 def run_cppcheck(file) -> list[ET.Element]:
     p = subprocess.run(
         ["cppcheck", "--xml", "--xml-version=2", file],
