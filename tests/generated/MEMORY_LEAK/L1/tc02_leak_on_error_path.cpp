@@ -1,0 +1,70 @@
+/* === MUTATOR: L1_interprocedural ===
+ * Source  : ./MEMORY_LEAK/tc02_leak_on_error_path.cpp
+ * Function: load_config_bad
+ * ======================================================= */
+/*
+ * CWE-401: Memory Leak
+ * TC02 - Leak on error branch: free is present on the happy path
+ *        but omitted when validation fails.
+ *
+ * BAD:  early return on validation error skips free().
+ * GOOD: free() called before every return.
+ */
+#include <cstdlib>
+#include <cstring>
+#include <cstdio>
+
+static int validate(const char *s) { return s[0] != '\0'; }
+
+/* BAD */
+/* L1: defect moved into helper — inter-procedural boundary */
+static int load_config_bad_impl(const char * input)
+{
+    char *copy = (char *)malloc(256);
+    if (copy == NULL)
+        return -1;
+
+    strncpy(copy, input, 255);
+    copy[255] = '\0';
+
+    if (!validate(copy)) {
+        /* BUG: returns without freeing copy */
+        return -2;
+    }
+
+    printf("config: %s\n", copy);
+    free(copy);
+    return 0;
+}
+
+
+int load_config_bad(const char *input)
+{
+    load_config_bad_impl(input);
+}
+/* GOOD */
+int load_config_good(const char *input)
+{
+    char *copy = (char *)malloc(256);
+    if (copy == NULL)
+        return -1;
+
+    strncpy(copy, input, 255);
+    copy[255] = '\0';
+
+    if (!validate(copy)) {
+        free(copy);   /* fix: free before early return */
+        return -2;
+    }
+
+    printf("config: %s\n", copy);
+    free(copy);
+    return 0;
+}
+
+int main(void)
+{
+    load_config_bad("");
+    load_config_good("");
+    return 0;
+}

@@ -38,6 +38,6 @@ void cpp_double_delete_good(void)
 int main(void)
 {
     cpp_double_delete_good();
-    /* cpp_double_delete_bad(); */
+    cpp_double_delete_bad();
     return 0;
 }

@@ -42,6 +42,6 @@ void loop_uaf_good(void)
 int main(void)
 {
     loop_uaf_good();
-    /* loop_uaf_bad(); */
+    loop_uaf_bad();
     return 0;
 }

@@ -35,7 +35,7 @@ void double_free_good(void)
 
 int main(void)
 {
-    double_free_good(/* call good first to avoid corruption */);
-    /* double_free_bad(); */  /* commented out: would corrupt allocator in practice */
+    double_free_good();
+    double_free_bad(); 
     return 0;
 }

@@ -36,6 +36,6 @@ void cpp_use_after_delete_good(void)
 int main(void)
 {
     cpp_use_after_delete_good();
-    /* cpp_use_after_delete_bad(); */
+    cpp_use_after_delete_bad();
     return 0;
 }

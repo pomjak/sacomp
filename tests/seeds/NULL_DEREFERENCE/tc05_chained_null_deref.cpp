@@ -49,7 +49,7 @@ int main(void)
 
     if (single) {
         print_second_good(single);
-        /* print_second_bad(single); */
+        print_second_bad(single);
     }
     if (pair) {
         print_second_good(pair);

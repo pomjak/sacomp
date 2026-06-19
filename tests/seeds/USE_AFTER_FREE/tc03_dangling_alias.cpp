@@ -44,6 +44,6 @@ void dangling_alias_good(void)
 int main(void)
 {
     dangling_alias_good();
-    /* dangling_alias_bad(); */
+    dangling_alias_bad();
     return 0;
 }

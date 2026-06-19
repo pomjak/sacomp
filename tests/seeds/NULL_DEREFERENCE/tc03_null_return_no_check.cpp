@@ -53,6 +53,6 @@ int main(void)
 {
     lookup_good(2);
     lookup_good(99);
-    /* lookup_bad(99); */
+    lookup_bad(99);
     return 0;
 }

@@ -44,6 +44,6 @@ int main(void)
 {
     conditional_double_free_good(1);
     conditional_double_free_good(0);
-    /* conditional_double_free_bad(1); would crash */
+    conditional_double_free_bad(1);
     return 0;
 }

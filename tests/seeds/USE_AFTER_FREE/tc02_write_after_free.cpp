@@ -42,6 +42,6 @@ void write_after_free_good(const char *src)
 int main(void)
 {
     write_after_free_good("updated");
-    /* write_after_free_bad("updated"); */
+    write_after_free_bad("updated");
     return 0;
 }

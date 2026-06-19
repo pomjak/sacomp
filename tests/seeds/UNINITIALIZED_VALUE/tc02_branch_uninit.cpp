@@ -36,6 +36,6 @@ int main(void)
 {
     conditional_uninit_good(0);
     conditional_uninit_good(1);
-    /* conditional_uninit_bad(0); */
+    conditional_uninit_bad(0);
     return 0;
 }

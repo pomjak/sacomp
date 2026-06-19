@@ -35,6 +35,6 @@ void malloc_no_check_good(void)
 int main(void)
 {
     malloc_no_check_good();
-    /* malloc_no_check_bad(); */
+    malloc_no_check_bad();
     return 0;
 }

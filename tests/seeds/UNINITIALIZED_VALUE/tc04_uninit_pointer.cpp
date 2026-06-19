@@ -35,6 +35,6 @@ void uninit_pointer_good(void)
 int main(void)
 {
     uninit_pointer_good();
-    /* uninit_pointer_bad(); */
+    uninit_pointer_bad();
     return 0;
 }

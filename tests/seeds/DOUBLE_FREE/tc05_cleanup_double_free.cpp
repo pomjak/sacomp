@@ -66,6 +66,6 @@ void process_good(void)
 int main(void)
 {
     process_good();
-    /* process_bad(); */
+    process_bad();
     return 0;
 }

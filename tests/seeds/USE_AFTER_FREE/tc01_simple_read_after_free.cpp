@@ -35,6 +35,6 @@ void read_after_free_good(void)
 int main(void)
 {
     read_after_free_good();
-    /* read_after_free_bad(); */
+    read_after_free_bad();
     return 0;
 }

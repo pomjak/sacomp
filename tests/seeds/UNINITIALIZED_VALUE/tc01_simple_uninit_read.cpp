@@ -29,6 +29,6 @@ int compute_good(int input)
 int main(void)
 {
     compute_good(5);
-    /* compute_bad(5); */
+    compute_bad(5);
     return 0;
 }

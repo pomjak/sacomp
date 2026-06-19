@@ -40,6 +40,6 @@ double distance_from_origin_good(void)
 int main(void)
 {
     distance_from_origin_good();
-    /* distance_from_origin_bad(); */
+    distance_from_origin_bad();
     return 0;
 }

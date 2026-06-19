@@ -43,6 +43,6 @@ void alias_double_free_good(void)
 int main(void)
 {
     alias_double_free_good();
-    /* alias_double_free_bad(); */
+    alias_double_free_bad();
     return 0;
 }

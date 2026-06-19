@@ -31,6 +31,6 @@ void index_uninit_good(int idx)
 int main(void)
 {
     index_uninit_good(3);
-    /* index_uninit_bad(); */
+    index_uninit_bad();
     return 0;
 }

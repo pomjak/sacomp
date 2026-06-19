@@ -47,6 +47,6 @@ int main(void)
 {
     deref_before_check_good(1);
     deref_before_check_good(0);
-    /* deref_before_check_bad(0); */
+    deref_before_check_bad(0);
     return 0;
 }

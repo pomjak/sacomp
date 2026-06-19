@@ -53,6 +53,6 @@ int main(void)
 {
     reset_then_deref_good(0);
     reset_then_deref_good(1);
-    /* reset_then_deref_bad(1); */
+    reset_then_deref_bad(1);
     return 0;
 }
