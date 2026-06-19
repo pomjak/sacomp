@@ -14,6 +14,8 @@ comparative analysis of static analyzators (Infer, cppcheck, clang sa), testing 
 │   └── tools.py        # wrapper for tools
 └── tests
     ├── generated       # generated/mutated test sets
+    ├── mutator         # mutator used for generated testca
     └── seeds           # manually crafted or picked tests
+
 ```
 
