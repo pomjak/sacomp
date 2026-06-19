@@ -1,8 +1,14 @@
+import subprocess
 import tools
 import parser
-from metrics import ToolStats, evaluate
+import graphs
+from metrics import *
 from pathlib import Path
 import sys
+
+
+def cleanup():
+    subprocess.run("rm -rf infer-out/ *.o", shell=True)
 
 
 def find_cpp_files(folder: Path) -> list[Path]:
@@ -26,32 +32,16 @@ def main(argv):
         return 1
 
     for test_file in find_cpp_files(folder):
+        print(test_file)
         for tool in ["cppcheck", "clang", "infer"]:
-            stat = stats[tool]
             raw = tools.run(tool, str(test_file))
             out = parser.process(tool, raw)
             evaluate(out, test_file, stats[tool], tool)
 
-    for tool, stat in stats.items():
-        print(tool)
+    print_all_stats(stats)
+    graphs.plot_benchmark_results(stats)
 
-        print("TP:", stat.overall.tp)
-        print("FP:", stat.overall.fp)
-        print("FN:", stat.overall.fn)
-
-        print("Precision:", stat.overall.precision())
-        print("Recall:", stat.overall.recall())
-        print("F1:", stat.overall.f1())
-
-        for category, category_stat in sorted(stat.by_category.items()):
-            print(f"  {category}")
-            print("    TP:", category_stat.tp)
-            print("    FP:", category_stat.fp)
-            print("    FN:", category_stat.fn)
-            print("    Precision:", category_stat.precision())
-            print("    Recall:", category_stat.recall())
-            print("    F1:", category_stat.f1())
-
+    cleanup()
     return 0
 
 
