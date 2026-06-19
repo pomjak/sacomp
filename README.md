@@ -1,5 +1,5 @@
 # sacomp
-comparative analysis of static analyzators (Infer, cppcheck, clang sa), testing with picked and mutated tests from NIST JULIET test set of cpp programs 
+comparative analysis of static analyzators (Infer, cppcheck, clang sa), testing with picked and mutated tests
 
 
 ## overview of structure
